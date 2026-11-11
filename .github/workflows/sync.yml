@@ -1,4 +1,4 @@
-name: Sync Bunny Mods to GitCode
+name: Sync Bunny Mods to Gitee
 on:
   workflow_dispatch:
   schedule:
@@ -6,7 +6,7 @@ on:
 
 env:
   SRC_REPO: JonataOliveiraa/Bunny-Loader-Mods
-  GITCODE_REPO: mmmmmhuuh/Bunny-Loader-Mods
+  GITEE_REPO: mo-ling22/Bunny-Loader-Mods
   DEST_BRANCH: mods
 
 permissions:
@@ -53,20 +53,19 @@ jobs:
             echo "$tag" >> synced_tags.txt
           done < all_tags.txt
           ls -la ./pkg
-      - name: Push to GitCode (fix 418)
+      - name: Push to Gitee
         env:
-          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           cd ./pkg
           git init
           git config user.name "bl-mirror-bot"
           git config user.email "bot@blmirror.local"
-          git config --global http.useragent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           git add .
           if git diff --cached --quiet; then
             echo "✅ No new files, finish normally"
             exit 0
           fi
           git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
-          git remote add gitcode https://${GITCODE_TOKEN}@gitcode.net/${{ env.GITCODE_REPO }}.git
-          git push gitcode HEAD:${{ env.DEST_BRANCH }} --force
+          git remote add gitee https://${GITEE_TOKEN}@gitee.com/${{ env.GITEE_REPO }}.git
+          git push gitee HEAD:${{ env.DEST_BRANCH }} --force
