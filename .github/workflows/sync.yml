@@ -8,7 +8,7 @@ env:
   SRC_REPO: JonataOliveira/BunnyLoader
   GITEE_USER: mo-ling22
   GITEE_REPO: Bunny-Loader-Mods
-  BRANCH: mods
+  TARGET_DIR: mods
   BATCH_COUNT: 8
 
 permissions:
@@ -54,14 +54,14 @@ jobs:
             echo "$tag" >> synced_tags.txt
           done < batch_tags.txt
 
-      - name: Push to Gitee（增量）
+      - name: Push to Gitee（适配现有main分支+mods文件夹）
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           git config --global http.postBuffer 524288000
           git config --global core.compression 0
           
-          # 判断pkg是否为空，空就直接跳过
+          # 判断pkg是否为空
           if [ ! -d "./pkg" ] || [ -z "$(ls -A ./pkg)" ]; then
             echo "✅ 本次没有新模组，跳过推送"
             exit 0
@@ -69,8 +69,8 @@ jobs:
           
           git clone https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/${{ env.GITEE_USER }}/${{ env.GITEE_REPO }}.git repo
           cd repo
-          git checkout ${{ env.BRANCH }}
-          cp -r ../pkg/* ./
+          # 直接在main分支，不切分支
+          cp -r ../pkg/* ./${{ env.TARGET_DIR }}/
           git config user.name "bl-mirror-bot"
           git config user.email "bot@bl-mirror.local"
           git add .
@@ -79,4 +79,4 @@ jobs:
             exit 0
           fi
           git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push origin ${{ env.BRANCH }}
+          git push origin main
