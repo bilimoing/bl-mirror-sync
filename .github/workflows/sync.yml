@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  SRC_REPO: JonataOliveiraa/Bunny-Loader-Mods
+  SRC_REPO: JonataOliveira/Bunny-Loader-Mods
   GITCODE_REPO: bilimoing/Bunny-Loader-Mods
   DEST_BRANCH: mods
 
@@ -16,10 +16,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Install GitHub CLI
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
+      - name: Install GitHub CLI (gh)
+        run: sudo apt update && sudo apt install gh -y
       - name: Cache synced tags
         id: tag_cache
         uses: actions/cache@v4
@@ -30,7 +28,7 @@ jobs:
         run: |
           touch synced_tags.txt
           gh api repos/${{ env.SRC_REPO }}/releases --paginate --jq '.[].tag_name' > all_tags.txt
-      - name: Download & push to GitCode
+      - name: Download bl packages and push
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
@@ -50,7 +48,7 @@ jobs:
           cd ./pkg
           git init
           git config user.name "bl-mirror-bot"
-          git config user.email "bot@users.noreply.github.com"
+          git config user.email "bot@example.com"
           git add .
           git diff --cached --quiet || git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
           git remote add gitcode https://oauth2:${GITCODE_TOKEN}@gitcode.net/${{ env.GITCODE_REPO }}.git
