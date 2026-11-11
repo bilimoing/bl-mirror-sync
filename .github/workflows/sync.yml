@@ -53,19 +53,20 @@ jobs:
             echo "$tag" >> synced_tags.txt
           done < all_tags.txt
           ls -la ./pkg
-      - name: Push to GitCode
+      - name: Push to GitCode (fix 418)
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
           cd ./pkg
           git init
-          git config user.name "bl‑mirror‑bot"
+          git config user.name "bl-mirror-bot"
           git config user.email "bot@blmirror.local"
+          git config --global http.useragent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           git add .
           if git diff --cached --quiet; then
             echo "✅ No new files, finish normally"
             exit 0
           fi
-          git commit -m "auto sync $(date -u +%Y‑%m‑%dT%H:%MZ)"
-          git remote add gitcode https://oauth2:${GITCODE_TOKEN}@gitcode.net/${{ env.GITCODE_REPO }}.git
+          git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
+          git remote add gitcode https://${GITCODE_TOKEN}@gitcode.net/${{ env.GITCODE_REPO }}.git
           git push gitcode HEAD:${{ env.DEST_BRANCH }} --force
