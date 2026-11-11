@@ -2,42 +2,39 @@ name: Sync Bunny Mods to Gitee
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */12 * * *'
 
 env:
-  SRC_REPO: JonataOliveiraa/Bunny-Loader-Mods
-  GITEE_REPO: mo-ling22/Bunny-Loader-Mods
+  SRC_REPO: JonataOliveira/BunnyLoader
   GITEE_USER: mo-ling22
-  DEST_BRANCH: mods
+  GITEE_REPO: Bunny-Loader-Mods
+  BRANCH: mods
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Update apt and install gh
-        run: |
-          sudo apt update -y
-          sudo apt install gh -y
-          gh --version
+      - name: Install GitHub CLI
+        uses: cli/cli-action@v2
+
       - name: Cache synced tags
-        id: tag_cache
         uses: actions/cache@v4
         with:
           path: ./synced_tags.txt
           key: ${{ github.workflow }}-taglist
+
       - name: Fetch release tags
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           touch synced_tags.txt
-          echo "=== Fetching releases from ${{ env.SRC_REPO }} ==="
           gh api repos/${{ env.SRC_REPO }}/releases --paginate --jq '.[].tag_name' > all_tags.txt
-          echo "=== Tag list ==="
           cat all_tags.txt
-      - name: Download packages
+
+      - name: Download new packages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,28 +42,31 @@ jobs:
           while read -r tag; do
             [ -z "$tag" ] && continue
             if grep -xF "$tag" synced_tags.txt; then
-              echo "Skip $tag"
+              echo "跳过已同步: $tag"
               continue
             fi
-            echo "Downloading $tag"
+            echo "正在下载 $tag"
             mkdir -p ./pkg/${tag}
             gh release download "$tag" -R ${{ env.SRC_REPO }} -D ./pkg/${tag} -p "*.bl" --skip-existing
             echo "$tag" >> synced_tags.txt
           done < all_tags.txt
-          ls -la ./pkg
-      - name: Push to Gitee
+
+      - name: Push to Gitee（增量）
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
-          cd ./pkg
-          git init
+          # 克隆远端仓库，不是新建git仓库
+          git clone https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/${{ env.GITEE_USER }}/${{ env.GITEE_REPO }}.git repo
+          cd repo
+          git checkout ${{ env.BRANCH }}
+          # 把新下载的包复制进去
+          cp -r ../pkg/* ./
           git config user.name "bl-mirror-bot"
-          git config user.email "bot@blmirror.local"
+          git config user.email "bot@bl-mirror.local"
           git add .
           if git diff --cached --quiet; then
-            echo "✅ No new files, finish normally"
+            echo "✅ 本次没有新增模组，结束推送"
             exit 0
           fi
           git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
-          git remote add gitee https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/mo-ling22/Bunny-Loader-Mods.git
-          git push gitee HEAD:${{ env.DEST_BRANCH }} --force
+          git push origin ${{ env.BRANCH }}
