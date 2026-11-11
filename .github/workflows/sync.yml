@@ -9,6 +9,7 @@ env:
   GITEE_USER: mo-ling22
   GITEE_REPO: Bunny-Loader-Mods
   BRANCH: mods
+  BATCH_COUNT: 8  # 一次同步多少个tag，调小更稳，比如5、8、10
 
 permissions:
   contents: read
@@ -18,7 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install GitHub CLI
-        uses: cli/cli-action@v2
+        run: |
+          sudo apt update
+          sudo apt install gh -y
 
       - name: Cache synced tags
         uses: actions/cache@v4
@@ -26,15 +29,16 @@ jobs:
           path: ./synced_tags.txt
           key: ${{ github.workflow }}-taglist
 
-      - name: Fetch release tags
+      - name: Fetch latest release tags (分批，只取最新BATCH_COUNT个)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           touch synced_tags.txt
-          gh api repos/${{ env.SRC_REPO }}/releases --paginate --jq '.[].tag_name' > all_tags.txt
-          cat all_tags.txt
+          # 取最新一批，不遍历全部历史
+          gh api repos/${{ env.SRC_REPO }}/releases --jq '.[].tag_name' | head -n ${{ env.BATCH_COUNT }} > batch_tags.txt
+          cat batch_tags.txt
 
-      - name: Download new packages
+      - name: Download new packages (分批)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -49,17 +53,17 @@ jobs:
             mkdir -p ./pkg/${tag}
             gh release download "$tag" -R ${{ env.SRC_REPO }} -D ./pkg/${tag} -p "*.bl" --skip-existing
             echo "$tag" >> synced_tags.txt
-          done < all_tags.txt
+          done < batch_tags.txt
 
       - name: Push to Gitee（增量）
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
-          # 克隆远端仓库，不是新建git仓库
+          git config --global http.postBuffer 524288000
+          git config --global core.compression 0
           git clone https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/${{ env.GITEE_USER }}/${{ env.GITEE_REPO }}.git repo
           cd repo
           git checkout ${{ env.BRANCH }}
-          # 把新下载的包复制进去
           cp -r ../pkg/* ./
           git config user.name "bl-mirror-bot"
           git config user.email "bot@bl-mirror.local"
