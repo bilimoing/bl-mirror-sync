@@ -9,7 +9,7 @@ env:
   GITEE_USER: mo-ling22
   GITEE_REPO: Bunny-Loader-Mods
   BRANCH: mods
-  BATCH_COUNT: 8  # 一次同步多少个tag，调小更稳，比如5、8、10
+  BATCH_COUNT: 8
 
 permissions:
   contents: read
@@ -34,7 +34,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           touch synced_tags.txt
-          # 取最新一批，不遍历全部历史
           gh api repos/${{ env.SRC_REPO }}/releases --jq '.[].tag_name' | head -n ${{ env.BATCH_COUNT }} > batch_tags.txt
           cat batch_tags.txt
 
@@ -61,6 +60,13 @@ jobs:
         run: |
           git config --global http.postBuffer 524288000
           git config --global core.compression 0
+          
+          # 判断pkg是否为空，空就直接跳过
+          if [ ! -d "./pkg" ] || [ -z "$(ls -A ./pkg)" ]; then
+            echo "✅ 本次没有新模组，跳过推送"
+            exit 0
+          fi
+          
           git clone https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/${{ env.GITEE_USER }}/${{ env.GITEE_REPO }}.git repo
           cd repo
           git checkout ${{ env.BRANCH }}
