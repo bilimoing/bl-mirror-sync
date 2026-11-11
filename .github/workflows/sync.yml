@@ -16,8 +16,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Install GitHub CLI
-        uses: cli/cli-setup@v3
+      - name: Install GitHub CLI via apt
+        run: |
+          sudo apt update
+          sudo apt install gh -y
       - name: Check gh version
         run: gh --version
       - name: Cache synced tags
