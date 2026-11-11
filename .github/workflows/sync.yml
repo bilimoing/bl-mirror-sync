@@ -67,5 +67,5 @@ jobs:
             exit 0
           fi
           git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
-          git remote add gitee https://${GITEE_TOKEN}@gitee.com/${{ env.GITEE_REPO }}.git
+          git remote add gitee https://x-access-token:${GITEE_TOKEN}@gitee.com/mo-ling22/Bunny-Loader-Mods.git
           git push gitee HEAD:${{ env.DEST_BRANCH }} --force
