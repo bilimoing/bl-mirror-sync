@@ -5,7 +5,7 @@ on:
     - cron: '0 */12 * * *'
 
 env:
-  SRC_REPO: JonataOliveira/BunnyLoader
+  SRC_REPO: JonataOliveiraa/BunnyLoader
   GITEE_USER: mo-ling22
   GITEE_REPO: Bunny-Loader-Mods
   TARGET_DIR: mods
@@ -61,7 +61,6 @@ jobs:
           git config --global http.postBuffer 524288000
           git config --global core.compression 0
           
-          # 判断pkg是否为空
           if [ ! -d "./pkg" ] || [ -z "$(ls -A ./pkg)" ]; then
             echo "✅ 本次没有新模组，跳过推送"
             exit 0
@@ -69,7 +68,6 @@ jobs:
           
           git clone https://${{ env.GITEE_USER }}:${GITEE_TOKEN}@gitee.com/${{ env.GITEE_USER }}/${{ env.GITEE_REPO }}.git repo
           cd repo
-          # 直接在main分支，不切分支
           cp -r ../pkg/* ./${{ env.TARGET_DIR }}/
           git config user.name "bl-mirror-bot"
           git config user.email "bot@bl-mirror.local"
