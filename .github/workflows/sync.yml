@@ -5,7 +5,7 @@ on:
     - cron: '0 */6 * * *'
 
 env:
-  SRC_REPO: JonataOliveira/Bunny-Loader-Mods
+  SRC_REPO: JonataOliveiraa/Bunny-Loader-Mods
   GITCODE_REPO: mmmmmhuuh/Bunny-Loader-Mods
   DEST_BRANCH: mods
 
@@ -16,12 +16,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Install GitHub CLI via apt
+      - name: Update apt and install gh
         run: |
-          sudo apt update
+          sudo apt update -y
           sudo apt install gh -y
-      - name: Check gh version
-        run: gh --version
+          gh --version
       - name: Cache synced tags
         id: tag_cache
         uses: actions/cache@v4
@@ -33,12 +32,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           touch synced_tags.txt
-          echo "Fetching releases from ${{ env.SRC_REPO }}"
+          echo "=== Fetching releases from ${{ env.SRC_REPO }} ==="
           gh api repos/${{ env.SRC_REPO }}/releases --paginate --jq '.[].tag_name' > all_tags.txt
+          echo "=== Tag list ==="
           cat all_tags.txt
-      - name: Download & push to GitCode
+      - name: Download packages
         env:
-          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p ./pkg
@@ -48,21 +47,25 @@ jobs:
               echo "Skip $tag"
               continue
             fi
-            echo "Download $tag"
+            echo "Downloading $tag"
             mkdir -p ./pkg/${tag}
             gh release download "$tag" -R ${{ env.SRC_REPO }} -D ./pkg/${tag} -p "*.bl" --skip-existing
             echo "$tag" >> synced_tags.txt
           done < all_tags.txt
-
+          ls -la ./pkg
+      - name: Push to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+        run: |
           cd ./pkg
           git init
-          git config user.name "bl-mirror-bot"
+          git config user.name "bl‑mirror‑bot"
           git config user.email "bot@blmirror.local"
           git add .
           if git diff --cached --quiet; then
-            echo "No new files, exit"
+            echo "✅ No new files, finish normally"
             exit 0
           fi
-          git commit -m "auto sync $(date -u +%Y-%m-%dT%H:%MZ)"
+          git commit -m "auto sync $(date -u +%Y‑%m‑%dT%H:%MZ)"
           git remote add gitcode https://oauth2:${GITCODE_TOKEN}@gitcode.net/${{ env.GITCODE_REPO }}.git
           git push gitcode HEAD:${{ env.DEST_BRANCH }} --force
