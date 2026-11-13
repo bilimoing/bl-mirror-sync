@@ -10,6 +10,7 @@ on:
     - cron: '0 */6 * * *'
 
 env:
+  GH_TOKEN: ${{ github.token }}
   UPSTREAM_REPO: JonataOliveiraa/Bunny-Loader-Mods
   GITEE_REPO: mo-ling22/Bunny-Loader-Mods
   GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
