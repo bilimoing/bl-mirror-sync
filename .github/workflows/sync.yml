@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       full_sync:
-        description: 全量同步（忽略缓存，逐个检查Gitee）
+        description: 全量同步（忽略已同步标记，逐个检查Gitee发行）
         type: boolean
         default: false
   schedule:
@@ -13,60 +13,81 @@ env:
   UPSTREAM_REPO: JonataOliveiraa/Bunny-Loader-Mods
   GITEE_REPO: mo-ling22/Bunny-Loader-Mods
   GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-  BATCH_COUNT: 20
+  BATCH_COUNT: 100
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up job
+      - name: Checkout 用于推送tag到Gitee
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install GitHub CLI
         run: |
           sudo apt update
-          sudo apt install gh
+          sudo apt install gh jq -y
           gh --version
+      - name: 初始化同步标记文件
+        run: touch .synced_tags.txt
       - name: Cache synced tags
         uses: actions/cache@v4
         with:
           path: .synced_tags.txt
-          key: ${{ runner.os }}-taglist-v2-${{ github.sha }}
+          key: ${{ runner.os }}-taglist-v3-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-taglist-v2-
-      - name: Fetch latest release tags
+            ${{ runner.os }}-taglist-v3-
+      - name: 获取上游全部Release（分页）
         id: fetch_tags
         run: |
-          gh api repos/${{ env.UPSTREAM_REPO }}/releases --per-page ${{ env.BATCH_COUNT }} | jq -r '.[].tag_name' > all_tags.txt
+          all_releases=$(gh api --paginate repos/${{ env.UPSTREAM_REPO }}/releases)
+          echo "$all_releases" | jq -r '.[].tag_name' > all_tags.txt
+          cat all_tags.txt
       - name: Download & upload packages
         run: |
-          set -e
+          # 不set -e，单个tag失败继续跑下一个
           while IFS= read -r tag; do
             if [ -z "$tag" ]; then continue; fi
-            # 先查Gitee是否已经存在该发行
-            resp=$(curl -s -o /dev/null -w "%{http_code}" https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases/tags/$tag?access_token=${{ env.GITEE_TOKEN }})
+            echo "===== 开始处理 tag: $tag ====="
+            # 1. 查询Gitee是否已有该发行
+            gitee_release_url="https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases/tags/$tag?access_token=${{ env.GITEE_TOKEN }}"
+            resp=$(curl -s -o gitee_resp.txt -w "%{http_code}" "$gitee_release_url")
+            echo "Gitee查询返回码: $resp"
             if [ "$resp" = "200" ] && [ "${{ github.event.inputs.full_sync }}" != "true" ]; then
-              echo "✅ $tag 已存在于Gitee，跳过"
+              echo "✅ $tag 在Gitee已存在，跳过"
               continue
             fi
-            echo "🔄 处理 $tag"
-            # 拉取上游release信息
+            echo "🔄 需要新建发行 $tag"
+            # 2. 获取上游release完整信息
             rel=$(gh api repos/${{ env.UPSTREAM_REPO }}/releases/tags/$tag)
             body=$(echo $rel | jq -r '.body')
             name=$(echo $rel | jq -r '.name')
-            # 下载附件
-            mkdir -p ./assets
-            echo $rel | jq -r '.assets[].browser_download_url' | while read url; do
-              wget -q -P ./assets "$url"
-            done
-            # 创建Gitee发行并上传附件
-            gitee_resp=$(curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases \
+            commit_sha=$(echo $rel | jq -r '.target_commitish')
+            echo "上游commit: $commit_sha"
+            # 3. 【重点】先在Gitee仓库创建tag（Gitee强制要求）
+            curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/git/tags \
+              -F "access_token=${{ env.GITEE_TOKEN }}" \
+              -F "tag_name=$tag" \
+              -F "ref=$commit_sha"
+            # 4. 创建Gitee发行版
+            release_resp=$(curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases \
               -F "access_token=${{ env.GITEE_TOKEN }}" \
               -F "tag_name=$tag" \
               -F "name=$name" \
               -F "body=$body")
-            # 上传每个资产
+            echo "Gitee创建发行返回：$release_resp"
+            # 5. 下载附件
+            mkdir -p ./assets
+            echo $rel | jq -r '.assets[].browser_download_url' | while read url; do
+              if [ -n "$url" ]; then
+                echo "下载资产: $url"
+                wget -q -P ./assets "$url"
+              fi
+            done
+            # 6. 上传附件
             for f in ./assets/*; do
               if [ -f "$f" ]; then
+                echo "上传文件: $f"
                 curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases/attachments \
                   -F "access_token=${{ env.GITEE_TOKEN }}" \
                   -F "tag_name=$tag" \
@@ -76,8 +97,3 @@ jobs:
             rm -rf ./assets
             echo "$tag" >> .synced_tags.txt
           done < all_tags.txt
-      - name: Post Cache synced tags
-        uses: actions/cache@v4
-        with:
-          path: .synced_tags.txt
-          key: ${{ runner.os }}-taglist-v2-${{ github.sha }}
