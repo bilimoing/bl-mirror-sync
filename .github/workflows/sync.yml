@@ -22,7 +22,10 @@ jobs:
       - name: Set up job
         uses: actions/checkout@v4
       - name: Install GitHub CLI
-        uses: cli/cli-setup@v3
+        run: |
+          sudo apt update
+          sudo apt install gh
+          gh --version
       - name: Cache synced tags
         uses: actions/cache@v4
         with:
