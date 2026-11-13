@@ -46,13 +46,12 @@ jobs:
           cat all_tags.txt
       - name: Download & upload packages
         run: |
-          # 不set -e，单个tag失败继续跑下一个
           while IFS= read -r tag; do
             if [ -z "$tag" ]; then continue; fi
             echo "===== 开始处理 tag: $tag ====="
             # 1. 查询Gitee是否已有该发行
             gitee_release_url="https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases/tags/$tag?access_token=${{ env.GITEE_TOKEN }}"
-            resp=$(curl -s -o gitee_resp.txt -w "%{http_code}" "$gitee_release_url")
+            resp=$(curl -s -o gitee_resp.txt -w "%{http_code}" "$gitee_release_url" || true)
             echo "Gitee查询返回码: $resp"
             if [ "$resp" = "200" ] && [ "${{ github.event.inputs.full_sync }}" != "true" ]; then
               echo "✅ $tag 在Gitee已存在，跳过"
@@ -64,37 +63,38 @@ jobs:
             body=$(echo $rel | jq -r '.body')
             name=$(echo $rel | jq -r '.name')
             commit_sha=$(echo $rel | jq -r '.target_commitish')
-            echo "上游commit: $commit_sha"
-            # 3. 【重点】先在Gitee仓库创建tag（Gitee强制要求）
+            echo "上游ref: $commit_sha"
+            # 3. 创建Gitee tag，失败也继续
             curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/git/tags \
               -F "access_token=${{ env.GITEE_TOKEN }}" \
               -F "tag_name=$tag" \
-              -F "ref=$commit_sha"
-            # 4. 创建Gitee发行版
+              -F "ref=$commit_sha" || true
+            # 4. 创建Gitee发行，失败也继续
             release_resp=$(curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases \
               -F "access_token=${{ env.GITEE_TOKEN }}" \
               -F "tag_name=$tag" \
               -F "name=$name" \
-              -F "body=$body")
+              -F "body=$body" || true)
             echo "Gitee创建发行返回：$release_resp"
             # 5. 下载附件
             mkdir -p ./assets
             echo $rel | jq -r '.assets[].browser_download_url' | while read url; do
               if [ -n "$url" ]; then
                 echo "下载资产: $url"
-                wget -q -P ./assets "$url"
+                wget -q -P ./assets "$url" || true
               fi
             done
-            # 6. 上传附件
+            # 6. 上传附件，单文件失败不打断循环
             for f in ./assets/*; do
               if [ -f "$f" ]; then
                 echo "上传文件: $f"
                 curl -X POST https://gitee.com/api/v5/repos/${{ env.GITEE_REPO }}/releases/attachments \
                   -F "access_token=${{ env.GITEE_TOKEN }}" \
                   -F "tag_name=$tag" \
-                  -F "file=@$f"
+                  -F "file=@$f" || true
               fi
             done
             rm -rf ./assets
             echo "$tag" >> .synced_tags.txt
+            echo "===== 处理完毕 $tag ====="
           done < all_tags.txt
